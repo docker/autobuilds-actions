@@ -1,0 +1,188 @@
+name: Docker Autobuilds
+
+on:
+  # This will run the workflow on pull requests. Remove if Autotest is disabled
+  pull_request:
+
+  # This will run the workflow on pushes to main and version tags. Adjust as needed
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+env:
+  # Define the context path and Dockerfile path.
+
+  # DOCKER_AUTOBUILDS_CONTEXT_PATH should be set to the "Build Context" in the Build Rules of your Docker Hub Automated Builds configuration.
+  DOCKER_AUTOBUILDS_CONTEXT_PATH: .
+
+  # DOCKER_AUTOBUILDS_DOCKERFILE_PATH should be set to the "Dockerfile Location" in the Build Rules of your Docker Hub Automated Builds configuration.
+  DOCKER_AUTOBUILDS_DOCKERFILE_PATH: Dockerfile
+
+  # DOCKER_REPOSITORY_NAME should be set to the name of the Docker Hub repository where the image will be pushed to.
+  DOCKER_REPOSITORY_NAME: nickadcock815/autobuilds-githubactions
+
+jobs:
+  autobuilds:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up paths
+        id: paths
+        run: |
+          echo "build_path=./${{ env.DOCKER_AUTOBUILDS_CONTEXT_PATH }}" >> $GITHUB_OUTPUT
+          echo "dockerfile_path=${{ env.DOCKER_AUTOBUILDS_DOCKERFILE_PATH }}" >> $GITHUB_OUTPUT
+          echo "dockerfile_folder=$(dirname ./${{ env.DOCKER_AUTOBUILDS_CONTEXT_PATH }}/${{ env.DOCKER_AUTOBUILDS_DOCKERFILE_PATH }})" >> $GITHUB_OUTPUT
+
+      # Checkout the source code repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Configure the Docker image tags based on the Git reference.
+      # The configuration here will push the `main` branch as `latest` and version tags as semver tags.
+      # See https://github.com/docker/metadata-action?tab=readme-ov-file#semver
+      - name: Generate Docker image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REPOSITORY_NAME }}
+          tags: |
+            # set latest tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+
+      # Configure Docker Buildx
+      # To speed up your builds with Docker Build Cloud see https://docs.docker.com/build-cloud/ci/
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Log in to Docker Hub with your Docker Hub credentials stored in GitHub Secrets
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Optionally run a post-checkout hook
+      - name: Run post-checkout hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/post_checkout
+          if [ -f "$path" ]; then
+            echo "Running post-checkout hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No post-checkout hook found at $path, skipping..."
+          fi
+          # Optionally run a post-checkout hook
+
+      # Optionally run a pre-build hook
+      - name: Run pre-build hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/pre_build
+          if [ -f "$path" ]; then
+            echo "Running pre-build hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No pre-build hook found at $path, skipping..."
+          fi
+
+      # Build and tag the Docker image
+      - name: Build and tag Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ steps.paths.outputs.build_path }}
+          file: ${{ steps.paths.outputs.dockerfile_path }}
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+
+      # Optionally run a post-build hook
+      - name: Run post-build hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/post_build
+          if [ -f "$path" ]; then
+            echo "Running post-build hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No post-build hook found at $path, skipping..."
+          fi      # Optionally run a post-build hook
+
+      # Optionally run a pre-test hook
+      - name: Run pre-test hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/pre_test
+          if [ -f "$path" ]; then
+            echo "Running pre-test hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No pre-test hook found at $path, skipping..."
+          fi
+
+      # Optionally test the Docker image using docker compose
+      # If you do not have tests, you can remove this step
+      - name: Test Docker image
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          echo "Running tests..."
+          for test_file in *[.-]test.yml; do
+            echo "Running test: $test_file"
+            docker compose -f "$test_file" run sut
+          done
+
+      # Optionally run a post-test hook
+      - name: Run post-test hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/post_test
+          if [ -f "$path" ]; then
+            echo "Running post-test hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No post-test hook found at $path, skipping..."
+          fi
+
+      # Optionally run a pre-push hook
+      - name: Run pre-push hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/pre_push
+          if [ -f "$path" ]; then
+            echo "Running pre-push hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No pre-push hook found at $path, skipping..."
+          fi
+
+      # Push the Docker image to Docker Hub if the event is a push to main or a semver tag
+      - name: Push Docker image
+        if: github.event_name == 'push'
+        run: |
+          echo "Pushing Docker image..."
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            echo "Pushing tag: $tag"
+            docker push $tag
+          done
+
+      # Optionally run a post-push hook
+      - name: Run post-push hook
+        working-directory: ${{ steps.paths.outputs.dockerfile_folder }}
+        run: |
+          path=hooks/post_push
+          if [ -f "$path" ]; then
+            echo "Running post-push hook..."
+            chmod +x "$path"
+            "$path"
+          else
+            echo "No post-push hook found at $path, skipping..."
+          fi
