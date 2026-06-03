@@ -42,7 +42,7 @@ In order to push an image to Docker Hub you will first need credentials to login
 Store the login details under the GitHub repository as [repository secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets):
 
 - `DOCKER_USERNAME`: this should be set to the username/org-name of the User or Organization the Docker Hub repository sits under.
-- `DOCKER_PASSWORD`: this is the token you created.
+- `DOCKER_TOKEN`: this is the token you created.
 
 ### Configure the GitHub Action workflow
 
