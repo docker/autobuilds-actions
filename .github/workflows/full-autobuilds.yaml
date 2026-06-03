@@ -21,7 +21,7 @@ env:
   DOCKER_AUTOBUILDS_DOCKERFILE_PATH: Dockerfile
 
   # DOCKER_REPOSITORY_NAME should be set to the name of the Docker Hub repository where the image will be pushed to.
-  DOCKER_REPOSITORY_NAME: nickadcock815/autobuilds-githubactions
+  DOCKER_REPOSITORY_NAME: scsautobuildsorg/autobuilds-githubactions
 
 jobs:
   autobuilds:
@@ -44,7 +44,7 @@ jobs:
       # See https://github.com/docker/metadata-action?tab=readme-ov-file#semver
       - name: Generate Docker image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
         with:
           images: ${{ env.DOCKER_REPOSITORY_NAME }}
           tags: |
@@ -55,14 +55,14 @@ jobs:
       # Configure Docker Buildx
       # To speed up your builds with Docker Build Cloud see https://docs.docker.com/build-cloud/ci/
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       # Log in to Docker Hub with your Docker Hub credentials stored in GitHub Secrets
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       # Optionally run a post-checkout hook
       - name: Run post-checkout hook
@@ -93,7 +93,7 @@ jobs:
 
       # Build and tag the Docker image
       - name: Build and tag Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ${{ steps.paths.outputs.build_path }}
           file: ${{ steps.paths.outputs.dockerfile_path }}
